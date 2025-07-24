@@ -51,6 +51,7 @@ const Signup = () => {
     setError("");
     try {
       await register({ name, email, password });
+      setError("Account created successfully!");
       navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Signup failed");
@@ -149,8 +150,7 @@ const Signup = () => {
           </div>
         </div>
       </div>
-      {/* Google Identity Services script */}
-      <script src="https://accounts.google.com/gsi/client" async defer></script>
+      {/* Google Identity Services script removed; now loaded globally in index.html */}
     </div>
   );
 };

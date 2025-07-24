@@ -2,6 +2,11 @@ const express = require("express");
 const { protect } = require("../middleware/auth");
 const BookingPage = require("../models/BookingPage");
 const Booking = require("../models/Booking");
+const {
+  sendBookingConfirmation,
+  sendOwnerNotification,
+} = require("../services/emailService");
+const { scheduleAllReminders } = require("../services/reminderService");
 
 const router = express.Router();
 
@@ -260,6 +265,36 @@ router.post("/:slug/book", async (req, res) => {
     });
 
     await booking.save();
+
+    // Send confirmation email to guest
+    sendBookingConfirmation(booking, bookingPage, email, name);
+    // Send notification to owner
+    if (bookingPage.owner && bookingPage.owner.email) {
+      sendOwnerNotification(
+        booking,
+        bookingPage,
+        bookingPage.owner.email,
+        bookingPage.owner.name || ""
+      );
+    }
+
+    // Ensure reminderSettings includes at least one SMS reminder if guestPhone is provided
+    if (
+      booking.guestPhone &&
+      (!booking.reminderSettings ||
+        (!booking.reminderSettings.sms15min &&
+          !booking.reminderSettings.sms1hour))
+    ) {
+      booking.reminderSettings = {
+        ...booking.reminderSettings,
+        sms15min: true,
+      };
+      await booking.save();
+    }
+
+    // Schedule reminders (email, SMS, WhatsApp)
+    scheduleAllReminders(booking, booking.reminderSettings || {});
+
     res.status(201).json(booking);
   } catch (err) {
     console.error("Error creating booking:", err);

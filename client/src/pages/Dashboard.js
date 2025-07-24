@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -14,118 +14,50 @@ import {
   Settings,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
+const iconMap = {
+  workflow: Zap,
+  booking: Calendar,
+  meeting: Calendar,
+  task: CheckCircle,
+  completed: CheckCircle,
+  running: Play,
+  paused: Pause,
+};
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [upcomingTasks, setUpcomingTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const stats = [
-    {
-      title: "Active Workflows",
-      value: "12",
-      change: "+2",
-      changeType: "positive",
-      icon: Zap,
-      color: "from-purple-500 to-purple-600",
-    },
-    {
-      title: "Scheduled Tasks",
-      value: "47",
-      change: "+8",
-      changeType: "positive",
-      icon: Calendar,
-      color: "from-blue-500 to-blue-600",
-    },
-    {
-      title: "Time Saved",
-      value: "23.5h",
-      change: "+5.2h",
-      changeType: "positive",
-      icon: Clock,
-      color: "from-green-500 to-green-600",
-    },
-    {
-      title: "Team Members",
-      value: "8",
-      change: "+1",
-      changeType: "positive",
-      icon: Users,
-      color: "from-pink-500 to-pink-600",
-    },
-  ];
-
-  const recentActivities = [
-    {
-      id: 1,
-      type: "workflow",
-      title: "Email Campaign Started",
-      description: "Automated email sequence initiated for new leads",
-      time: "2 minutes ago",
-      status: "running",
-      icon: Play,
-    },
-    {
-      id: 2,
-      type: "meeting",
-      title: "Team Standup Scheduled",
-      description: "Daily standup meeting scheduled for tomorrow",
-      time: "15 minutes ago",
-      status: "completed",
-      icon: CheckCircle,
-    },
-    {
-      id: 3,
-      type: "task",
-      title: "Report Generation",
-      description: "Monthly analytics report generation completed",
-      time: "1 hour ago",
-      status: "completed",
-      icon: BarChart3,
-    },
-    {
-      id: 4,
-      type: "workflow",
-      title: "Invoice Processing",
-      description: "Invoice processing workflow paused due to error",
-      time: "2 hours ago",
-      status: "paused",
-      icon: Pause,
-    },
-  ];
-
-  const upcomingTasks = [
-    {
-      id: 1,
-      title: "Client Meeting",
-      time: "10:00 AM",
-      date: "Today",
-      priority: "high",
-      type: "meeting",
-    },
-    {
-      id: 2,
-      title: "Review Q4 Reports",
-      time: "2:00 PM",
-      date: "Today",
-      priority: "medium",
-      type: "task",
-    },
-    {
-      id: 3,
-      title: "Team Retrospective",
-      time: "4:00 PM",
-      date: "Tomorrow",
-      priority: "medium",
-      type: "meeting",
-    },
-    {
-      id: 4,
-      title: "Update Documentation",
-      time: "11:00 AM",
-      date: "Tomorrow",
-      priority: "low",
-      type: "task",
-    },
-  ];
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await axios.get("/api/dashboard/summary", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setStats(res.data.stats);
+        setRecentActivities(res.data.recentActivities);
+        setUpcomingTasks(res.data.upcomingTasks);
+      } catch (err) {
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Failed to load dashboard."
+        );
+      }
+      setLoading(false);
+    };
+    if (token) fetchDashboard();
+  }, [token]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -137,6 +69,8 @@ const Dashboard = () => {
         return "text-yellow-600 bg-yellow-100";
       case "error":
         return "text-red-600 bg-red-100";
+      case "upcoming":
+        return "text-purple-600 bg-purple-100";
       default:
         return "text-gray-600 bg-gray-100";
     }
@@ -154,6 +88,22 @@ const Dashboard = () => {
         return "text-gray-600 bg-gray-100";
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl text-gray-500">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl text-red-500">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -175,55 +125,60 @@ const Dashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div
-                key={stat.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="card"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      {stat.title}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                    <div className="flex items-center mt-1">
-                      <TrendingUp
-                        className={`w-4 h-4 mr-1 ${
-                          stat.changeType === "positive"
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      />
-                      <span
-                        className={`text-sm font-medium ${
-                          stat.changeType === "positive"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {stat.change}
-                      </span>
-                      <span className="text-sm text-gray-500 ml-1">
-                        from last week
-                      </span>
+          {stats &&
+            [
+              {
+                title: "Active Workflows",
+                value: stats.workflows,
+                icon: Zap,
+                color: "from-purple-500 to-purple-600",
+              },
+              {
+                title: "Scheduled Bookings",
+                value: stats.bookings,
+                icon: Calendar,
+                color: "from-blue-500 to-blue-600",
+              },
+              {
+                title: "Forms",
+                value: stats.forms,
+                icon: BarChart3,
+                color: "from-green-500 to-green-600",
+              },
+              {
+                title: "Surveys",
+                value: stats.surveys,
+                icon: Users,
+                color: "from-pink-500 to-pink-600",
+              },
+            ].map((stat, index) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div
+                  key={stat.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  className="card"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        {stat.title}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {stat.value}
+                      </p>
+                    </div>
+                    <div
+                      className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center`}
+                    >
+                      <Icon className="w-6 h-6 text-white" />
                     </div>
                   </div>
-                  <div
-                    className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center`}
-                  >
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
         </div>
 
         {/* Main Content Grid */}
@@ -240,17 +195,20 @@ const Dashboard = () => {
                 <h2 className="text-xl font-semibold text-gray-900">
                   Recent Activities
                 </h2>
-                <button className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                <button
+                  className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                  onClick={() => navigate("/scheduling")}
+                >
                   View all
                 </button>
               </div>
 
               <div className="space-y-4">
                 {recentActivities.map((activity, index) => {
-                  const Icon = activity.icon;
+                  const Icon = iconMap[activity.type] || Play;
                   return (
                     <motion.div
-                      key={activity.id}
+                      key={index}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.6, delay: 0.5 + index * 0.1 }}
@@ -271,7 +229,9 @@ const Dashboard = () => {
                           {activity.description}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {activity.time}
+                          {typeof activity.time === "string"
+                            ? activity.time
+                            : new Date(activity.time).toLocaleString()}
                         </p>
                       </div>
                       <div
@@ -299,7 +259,10 @@ const Dashboard = () => {
                 <h2 className="text-xl font-semibold text-gray-900">
                   Upcoming Tasks
                 </h2>
-                <button className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                <button
+                  className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                  onClick={() => navigate("/calendar")}
+                >
                   View calendar
                 </button>
               </div>
@@ -307,7 +270,7 @@ const Dashboard = () => {
               <div className="space-y-4">
                 {upcomingTasks.map((task, index) => (
                   <motion.div
-                    key={task.id}
+                    key={index}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.7 + index * 0.1 }}
@@ -357,15 +320,26 @@ const Dashboard = () => {
                 Quick Actions
               </h3>
               <div className="space-y-3">
-                <button className="w-full flex items-center justify-center px-4 py-2 border border-primary-300 text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors duration-200">
+                <button
+                  className="w-full flex items-center justify-center px-4 py-2 border border-primary-300 text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors duration-200"
+                  onClick={() =>
+                    navigate("/workflows", { state: { openNew: true } })
+                  }
+                >
                   <Zap className="w-4 h-4 mr-2" />
                   Create New Workflow
                 </button>
-                <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                <button
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => navigate("/calendar")}
+                >
                   <Calendar className="w-4 h-4 mr-2" />
                   Schedule Meeting
                 </button>
-                <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                <button
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => navigate("/profile")}
+                >
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </button>

@@ -31,7 +31,6 @@ const Profile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [editName, setEditName] = useState("");
   const [editAvatar, setEditAvatar] = useState(null);
@@ -45,6 +44,7 @@ const Profile = () => {
   const [zohoConnected, setZohoConnected] = useState(false);
   const [disconnectingOutlook, setDisconnectingOutlook] = useState(false);
   const [disconnectingZoho, setDisconnectingZoho] = useState(false);
+  const [success, setSuccess] = useState("");
   // Meeting preferences
   const [meetingPreferences, setMeetingPreferences] = useState({
     defaultMeetingType: "google-meet",
@@ -66,6 +66,9 @@ const Profile = () => {
     enableSMS: false,
     enableWhatsApp: false,
   });
+  const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
+  const [changeNewPassword, setChangeNewPassword] = useState("");
+  const [changeConfirmPassword, setChangeConfirmPassword] = useState("");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -212,7 +215,7 @@ const Profile = () => {
       setProfile(res.data.user);
       setEditMode(false);
       setSuccess("Profile updated successfully!");
-      setTimeout(() => setSuccess(""), 3000);
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
       setError("Failed to update profile");
     } finally {
@@ -331,7 +334,7 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSuccess("Meeting preferences saved successfully!");
-      setTimeout(() => setSuccess(""), 3000);
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
       setError("Failed to save meeting preferences");
     }
@@ -350,7 +353,7 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSuccess("Reminder preferences saved successfully!");
-      setTimeout(() => setSuccess(""), 3000);
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
       setError("Failed to save reminder preferences");
     }
@@ -962,6 +965,127 @@ const Profile = () => {
                 Save Reminder Preferences
               </button>
             </div>
+            {/* Change/Set Password Card */}
+            {profile && (
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-blue-100">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-100 to-red-100 flex items-center justify-center">
+                    <FaUser className="w-6 h-6 text-pink-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-blue-700">
+                      {profile.provider === "google"
+                        ? "Set Password"
+                        : "Change Password"}
+                    </h3>
+                    <p className="text-gray-600">
+                      {profile.provider === "google"
+                        ? "Set a password to enable email login in addition to Google login."
+                        : "Update your account password for better security"}
+                    </p>
+                  </div>
+                </div>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setError("");
+                    setSuccess("");
+                    if (
+                      (!changeCurrentPassword &&
+                        profile.provider !== "google") ||
+                      !changeNewPassword ||
+                      !changeConfirmPassword
+                    ) {
+                      setError("Please fill in all fields.");
+                      return;
+                    }
+                    if (changeNewPassword !== changeConfirmPassword) {
+                      setError("New passwords do not match.");
+                      return;
+                    }
+                    try {
+                      await axios.put(
+                        "/api/auth/change-password",
+                        {
+                          currentPassword:
+                            profile.provider === "google"
+                              ? undefined
+                              : changeCurrentPassword,
+                          newPassword: changeNewPassword,
+                        },
+                        {
+                          headers: { Authorization: `Bearer ${token}` },
+                        }
+                      );
+                      setSuccess(
+                        profile.provider === "google"
+                          ? "Password set successfully! You can now log in with email and password."
+                          : "Password changed successfully!"
+                      );
+                      setChangeCurrentPassword("");
+                      setChangeNewPassword("");
+                      setChangeConfirmPassword("");
+                    } catch (err) {
+                      setError(
+                        err.response?.data?.message ||
+                          err.message ||
+                          "Failed to change password."
+                      );
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  {profile.provider !== "google" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        className="w-full border rounded px-3 py-2"
+                        value={changeCurrentPassword || ""}
+                        onChange={(e) =>
+                          setChangeCurrentPassword(e.target.value)
+                        }
+                        required={profile.provider !== "google"}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full border rounded px-3 py-2"
+                      value={changeNewPassword || ""}
+                      onChange={(e) => setChangeNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full border rounded px-3 py-2"
+                      value={changeConfirmPassword || ""}
+                      onChange={(e) => setChangeConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-red-500 text-white font-semibold shadow-lg hover:scale-105 transition-all w-full"
+                  >
+                    {profile.provider === "google"
+                      ? "Set Password"
+                      : "Change Password"}
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -46,6 +46,7 @@ app.use("/api/surveys", require("./routes/surveys"));
 app.use("/api/survey-responses", require("./routes/surveyResponses"));
 app.use("/api/auto-reschedule", require("./routes/autoReschedule"));
 app.use("/api/integrations", require("./routes/integrations"));
+app.use("/api/dashboard", require("./routes/dashboard"));
 
 // Health check
 app.get("/api/health", (req, res) => {

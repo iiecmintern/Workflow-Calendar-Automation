@@ -104,6 +104,11 @@ const userSchema = new mongoose.Schema(
       enableSMS: { type: Boolean, default: false },
       enableWhatsApp: { type: Boolean, default: false },
     },
+    provider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
   },
   {
     timestamps: true,

@@ -42,10 +42,10 @@ const Login = () => {
       setError("Please enter both email and password.");
       return;
     }
-    setError("");
     try {
       await login({ email, password });
       navigate("/dashboard");
+      setError("Login successful!");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Login failed");
     }
@@ -117,8 +117,7 @@ const Login = () => {
           </div>
         </div>
       </div>
-      {/* Google Identity Services script */}
-      <script src="https://accounts.google.com/gsi/client" async defer></script>
+      {/* Google Identity Services script removed; now loaded globally in index.html */}
     </div>
   );
 };

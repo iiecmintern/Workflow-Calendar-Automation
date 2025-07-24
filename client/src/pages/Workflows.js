@@ -5,8 +5,7 @@ import { FaPlusCircle, FaProjectDiagram } from "react-icons/fa";
 
 const HEADER_IMAGE =
   "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80";
-const EMPTY_IMAGE =
-  "https://assets-global.website-files.com/5f6b719079b2b1c8d1e3e7c2/63e3e2e2e2e2e2e2e2e2e2e2_workflow-empty-state.svg";
+const EMPTY_IMAGE = "/images/feature-analytics.png";
 
 const Workflows = () => {
   const { workflows, loading, error, createWorkflow, deleteWorkflow } =
@@ -15,6 +14,7 @@ const Workflows = () => {
   const [form, setForm] = useState({ name: "", description: "" });
   const [creating, setCreating] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [search, setSearch] = useState("");
   const navigate = useNavigate();
 
   const handleCreate = async (e) => {
@@ -44,6 +44,15 @@ const Workflows = () => {
       setLocalError("Failed to delete workflow");
     }
   };
+
+  // Filter workflows based on search
+  const filteredWorkflows = workflows.filter((wf) => {
+    const query = search.toLowerCase();
+    return (
+      wf.name.toLowerCase().includes(query) ||
+      (wf.description && wf.description.toLowerCase().includes(query))
+    );
+  });
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 pb-20">
@@ -130,30 +139,50 @@ const Workflows = () => {
           )}
         </form>
       )}
+      {/* Search Bar */}
+      <div className="w-full max-w-3xl mx-auto mb-6">
+        <input
+          type="text"
+          className="w-full px-4 py-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-lg shadow"
+          placeholder="Search workflows by name or description..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
       {/* Workflow List or Empty State */}
       <div className="flex flex-col items-center gap-8 max-w-3xl w-full mx-auto mt-8">
         {loading && <div>Loading...</div>}
         {error && <div className="text-red-600">{error}</div>}
-        {workflows.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center bg-white/90 rounded-2xl shadow-xl p-10 border border-blue-100 mt-8">
+        {filteredWorkflows.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center bg-white/90 rounded-2xl shadow-xl p-12 border border-blue-100 mt-8 max-w-xl w-full">
             <img
               src={EMPTY_IMAGE}
               alt="No workflows"
-              className="w-48 h-48 object-contain mb-4"
+              className="w-56 h-56 object-contain mb-6 drop-shadow-lg animate-bounce-slow"
             />
-            <div className="text-2xl font-bold text-blue-700 mb-2">
+            <div className="text-3xl font-extrabold text-blue-700 mb-2 text-center">
               No workflows yet
             </div>
-            <div className="text-gray-500 text-lg mb-4">
-              Click{" "}
-              <span className="text-primary-600 font-semibold">
-                New Workflow
-              </span>{" "}
-              to get started!
+            <div className="text-gray-500 text-lg mb-6 text-center">
+              Workflows help you automate, organize, and boost your
+              productivity.
+              <br />
+              Get started by creating your first workflow!
+            </div>
+            <button
+              className="px-8 py-3 rounded-full bg-gradient-to-r from-blue-600 to-green-500 text-white font-bold shadow-lg hover:scale-105 hover:shadow-xl transition-all text-lg mb-4"
+              onClick={() => setShowForm(true)}
+            >
+              <FaPlusCircle className="inline-block mr-2 mb-1" /> Create Your
+              First Workflow
+            </button>
+            <div className="text-sm text-gray-400 text-center mt-2">
+              <span className="font-semibold text-blue-500">Tip:</span> You can
+              automate approvals, scheduling, and more!
             </div>
           </div>
         )}
-        {workflows.map((wf) => (
+        {filteredWorkflows.map((wf) => (
           <div
             key={wf._id}
             className="bg-white/90 rounded-2xl shadow-xl p-6 flex items-center justify-between w-full border border-blue-100 hover:shadow-2xl transition-all"
@@ -198,4 +227,3 @@ const Workflows = () => {
 };
 
 export default Workflows;
- 

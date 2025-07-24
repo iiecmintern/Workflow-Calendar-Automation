@@ -68,7 +68,7 @@ const Navbar = () => {
       path: bookingSlug ? `/book/${bookingSlug}` : "/book/me",
       icon: FaCalendarAlt,
     },
-    { name: "Settings", path: "/settings", icon: AiOutlineSetting },
+    // { name: "Settings", path: "/settings", icon: AiOutlineSetting },
   ];
 
   return (

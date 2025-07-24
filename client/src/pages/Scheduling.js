@@ -14,6 +14,7 @@ const Scheduling = () => {
   const [alert, setAlert] = useState("");
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", start: "", end: "" });
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchBookings();
@@ -86,6 +87,16 @@ const Scheduling = () => {
     }
   };
 
+  // Filter bookings based on search
+  const filteredBookings = bookings.filter((b) => {
+    const query = search.toLowerCase();
+    return (
+      b.title.toLowerCase().includes(query) ||
+      (b.guestName && b.guestName.toLowerCase().includes(query)) ||
+      b.start.toLocaleDateString().toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center py-0 px-0 relative overflow-hidden">
       <img
@@ -127,14 +138,24 @@ const Scheduling = () => {
             {error}
           </div>
         )}
+        {/* Search Bar */}
+        <div className="w-full max-w-3xl mx-auto mb-6">
+          <input
+            type="text"
+            className="w-full px-4 py-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-lg shadow"
+            placeholder="Search bookings by title, guest, or date..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         {/* Booking Cards */}
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
           {loading ? (
             <div className="text-center text-lg text-white/90">Loading...</div>
-          ) : bookings.length === 0 ? (
+          ) : filteredBookings.length === 0 ? (
             <div className="text-center text-white/90">No bookings found.</div>
           ) : (
-            bookings.map((b) => (
+            filteredBookings.map((b) => (
               <div
                 key={b._id}
                 className="bg-white/90 rounded-2xl shadow-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-l-8 border-blue-400 hover:shadow-2xl transition-all"

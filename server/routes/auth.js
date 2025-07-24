@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
 require("dotenv").config();
+const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -90,7 +91,12 @@ router.post("/google", async (req, res) => {
     const { email, name, sub } = payload;
     let user = await User.findOne({ email });
     if (!user) {
-      user = await User.create({ name, email, password: sub });
+      user = await User.create({
+        name,
+        email,
+        password: sub,
+        provider: "google",
+      });
     }
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
       expiresIn: "7d",
@@ -101,6 +107,37 @@ router.post("/google", async (req, res) => {
     });
   } catch (err) {
     res.status(400).json({ message: "Google authentication failed." });
+  }
+});
+
+// Change Password
+router.put("/change-password", protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ message: "Current password is incorrect." });
+    }
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters." });
+    }
+    user.password = newPassword;
+    await user.save();
+    res.json({ message: "Password changed successfully." });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
   }
 });
 
