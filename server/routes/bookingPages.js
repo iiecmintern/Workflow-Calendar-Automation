@@ -193,7 +193,14 @@ router.get("/:slug/availability", async (req, res) => {
       const aiText = groqRes.data.choices?.[0]?.message?.content || "";
       const match = aiText.match(/\[.*\]/s);
       if (match) {
-        aiSuggestions = JSON.parse(match[0]);
+        try {
+          aiSuggestions = JSON.parse(match[0]);
+        } catch (err) {
+          console.error("AI slot suggestion JSON parse error:", err, match[0]);
+          aiSuggestions = [];
+        }
+      } else {
+        aiSuggestions = [];
       }
     } catch (aiErr) {
       console.error(
@@ -264,6 +271,10 @@ router.post("/:slug/book", async (req, res) => {
       status: "confirmed",
     });
 
+    await booking.save();
+
+    // Generate a placeholder meeting link and save it
+    booking.meetingLink = `http://localhost:3000/meeting/${booking._id}`;
     await booking.save();
 
     // Send confirmation email to guest
