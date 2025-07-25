@@ -79,6 +79,14 @@ const userSchema = new mongoose.Schema(
     googleTokens: { type: Object, default: null },
     googleCalendarConnected: { type: Boolean, default: false },
     googleCalendarConnectedAt: { type: Date, default: null },
+    // Outlook Calendar integration
+    outlookTokens: { type: Object, default: null },
+    outlookCalendarConnected: { type: Boolean, default: false },
+    outlookCalendarConnectedAt: { type: Date, default: null },
+    // Zoho Calendar integration
+    zohoTokens: { type: Object, default: null },
+    zohoCalendarConnected: { type: Boolean, default: false },
+    zohoCalendarConnectedAt: { type: Date, default: null },
     // Meeting preferences
     defaultMeetingType: {
       type: String,
