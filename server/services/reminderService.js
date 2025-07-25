@@ -174,20 +174,20 @@ const sendSMSReminder = async (booking, reminderType, phoneNumber) => {
       minute: "2-digit",
     })}. ${booking.meetingLink ? `Join: ${booking.meetingLink}` : ""}`;
 
-    const response = await axios.post(
-      `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
-      {
-        To: phoneNumber,
-        From: process.env.TWILIO_PHONE_NUMBER,
-        Body: message,
+    const response = await axios({
+      method: "post",
+      url: `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
+      auth: {
+        username: process.env.TWILIO_ACCOUNT_SID,
+        password: process.env.TWILIO_AUTH_TOKEN,
       },
-      {
-        auth: {
-          username: process.env.TWILIO_ACCOUNT_SID,
-          password: process.env.TWILIO_AUTH_TOKEN,
-        },
-      }
-    );
+      data: `To=${encodeURIComponent(phoneNumber)}&From=${encodeURIComponent(
+        process.env.TWILIO_PHONE_NUMBER
+      )}&Body=${encodeURIComponent(message)}`,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
 
     console.log(
       `SMS reminder sent to ${phoneNumber} for ${reminderType} reminder`
@@ -290,17 +290,37 @@ const scheduleReminder = async (booking, reminderType, reminderTime) => {
 // Send reminder through all configured channels
 const sendReminder = async (booking, reminderType) => {
   try {
+    // Get user preferences to check if SMS/WhatsApp are enabled
+    const User = require("../models/User");
+    const user = await User.findById(booking.owner).select(
+      "reminderPreferences"
+    );
+
     // Send email reminder
     await sendEmailReminder(booking, reminderType);
 
-    // Send SMS reminder if phone number is available
-    if (booking.guestPhone) {
-      await sendSMSReminder(booking, reminderType, booking.guestPhone);
+    // Send SMS reminder if phone number is available and SMS is enabled
+    if (booking.guestPhone && user?.reminderPreferences?.enableSMS) {
+      const smsEnabled =
+        reminderType === "15min"
+          ? user.reminderPreferences.sms15min
+          : user.reminderPreferences.sms1hour;
+
+      if (smsEnabled) {
+        await sendSMSReminder(booking, reminderType, booking.guestPhone);
+      }
     }
 
-    // Send WhatsApp reminder if phone number is available
-    if (booking.guestPhone) {
-      await sendWhatsAppReminder(booking, reminderType, booking.guestPhone);
+    // Send WhatsApp reminder if phone number is available and WhatsApp is enabled
+    if (booking.guestPhone && user?.reminderPreferences?.enableWhatsApp) {
+      const whatsappEnabled =
+        reminderType === "15min"
+          ? user.reminderPreferences.whatsapp15min
+          : user.reminderPreferences.whatsapp1hour;
+
+      if (whatsappEnabled) {
+        await sendWhatsAppReminder(booking, reminderType, booking.guestPhone);
+      }
     }
 
     // Update reminder status in database
@@ -334,7 +354,13 @@ const scheduleAllReminders = async (booking, reminderSettings) => {
   try {
     const startTime = new Date(booking.start);
 
-    // Schedule reminders based on settings
+    // Get user preferences to check if SMS/WhatsApp are enabled
+    const User = require("../models/User");
+    const user = await User.findById(booking.owner).select(
+      "reminderPreferences"
+    );
+
+    // Schedule email reminders
     if (reminderSettings.email15min) {
       const reminderTime = new Date(startTime.getTime() - 15 * 60 * 1000);
       await scheduleReminder(booking, "15min", reminderTime);
@@ -355,6 +381,38 @@ const scheduleAllReminders = async (booking, reminderSettings) => {
         startTime.getTime() - 7 * 24 * 60 * 60 * 1000
       );
       await scheduleReminder(booking, "1week", reminderTime);
+    }
+
+    // Schedule SMS reminders if enabled and phone number is available
+    if (booking.guestPhone && user?.reminderPreferences?.enableSMS) {
+      if (reminderSettings.sms15min || user.reminderPreferences.sms15min) {
+        const reminderTime = new Date(startTime.getTime() - 15 * 60 * 1000);
+        await scheduleReminder(booking, "15min", reminderTime);
+      }
+
+      if (reminderSettings.sms1hour || user.reminderPreferences.sms1hour) {
+        const reminderTime = new Date(startTime.getTime() - 60 * 60 * 1000);
+        await scheduleReminder(booking, "1hour", reminderTime);
+      }
+    }
+
+    // Schedule WhatsApp reminders if enabled and phone number is available
+    if (booking.guestPhone && user?.reminderPreferences?.enableWhatsApp) {
+      if (
+        reminderSettings.whatsapp15min ||
+        user.reminderPreferences.whatsapp15min
+      ) {
+        const reminderTime = new Date(startTime.getTime() - 15 * 60 * 1000);
+        await scheduleReminder(booking, "15min", reminderTime);
+      }
+
+      if (
+        reminderSettings.whatsapp1hour ||
+        user.reminderPreferences.whatsapp1hour
+      ) {
+        const reminderTime = new Date(startTime.getTime() - 60 * 60 * 1000);
+        await scheduleReminder(booking, "1hour", reminderTime);
+      }
     }
 
     console.log(`All reminders scheduled for booking ${booking._id}`);
