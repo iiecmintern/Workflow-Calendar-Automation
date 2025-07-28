@@ -109,8 +109,11 @@ router.get("/reminder-preferences", protect, async (req, res) => {
       sms1hour: user.reminderPreferences?.sms1hour ?? false,
       whatsapp15min: user.reminderPreferences?.whatsapp15min ?? false,
       whatsapp1hour: user.reminderPreferences?.whatsapp1hour ?? false,
+      call15min: user.reminderPreferences?.call15min ?? false,
+      call1hour: user.reminderPreferences?.call1hour ?? false,
       enableSMS: user.reminderPreferences?.enableSMS ?? false,
       enableWhatsApp: user.reminderPreferences?.enableWhatsApp ?? false,
+      enableCall: user.reminderPreferences?.enableCall ?? false,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -129,8 +132,11 @@ router.put("/reminder-preferences", protect, async (req, res) => {
       sms1hour,
       whatsapp15min,
       whatsapp1hour,
+      call15min,
+      call1hour,
       enableSMS,
       enableWhatsApp,
+      enableCall,
     } = req.body;
 
     const updateData = {
@@ -143,8 +149,11 @@ router.put("/reminder-preferences", protect, async (req, res) => {
         sms1hour: sms1hour ?? false,
         whatsapp15min: whatsapp15min ?? false,
         whatsapp1hour: whatsapp1hour ?? false,
+        call15min: call15min ?? false,
+        call1hour: call1hour ?? false,
         enableSMS: enableSMS ?? false,
         enableWhatsApp: enableWhatsApp ?? false,
+        enableCall: enableCall ?? false,
       },
     };
 
@@ -161,8 +170,11 @@ router.put("/reminder-preferences", protect, async (req, res) => {
       sms1hour: user.reminderPreferences.sms1hour,
       whatsapp15min: user.reminderPreferences.whatsapp15min,
       whatsapp1hour: user.reminderPreferences.whatsapp1hour,
+      call15min: user.reminderPreferences.call15min,
+      call1hour: user.reminderPreferences.call1hour,
       enableSMS: user.reminderPreferences.enableSMS,
       enableWhatsApp: user.reminderPreferences.enableWhatsApp,
+      enableCall: user.reminderPreferences.enableCall,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });

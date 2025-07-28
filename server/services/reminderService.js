@@ -251,6 +251,72 @@ const sendWhatsAppReminder = async (booking, reminderType, phoneNumber) => {
   }
 };
 
+// Send call reminder using Twilio Voice API
+const sendCallReminder = async (booking, reminderType, phoneNumber) => {
+  try {
+    if (
+      !process.env.TWILIO_ACCOUNT_SID ||
+      !process.env.TWILIO_AUTH_TOKEN ||
+      !process.env.TWILIO_PHONE_NUMBER
+    ) {
+      console.log("Twilio credentials not configured, skipping call reminder");
+      return false;
+    }
+
+    const startDate = new Date(booking.start);
+    const reminderText =
+      {
+        "15min": "15 minutes",
+        "1hour": "1 hour",
+        "1day": "1 day",
+        "1week": "1 week",
+      }[reminderType] || reminderType;
+
+    // Create TwiML for the call
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice" language="en-US">
+    Hello! This is your meeting reminder. Your meeting "${
+      booking.title
+    }" starts in ${reminderText} at ${startDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}.
+    ${
+      booking.meetingLink
+        ? `You can join the meeting at ${booking.meetingLink}`
+        : ""
+    }
+    Thank you and have a great meeting!
+  </Say>
+</Response>`;
+
+    // Make the call using Twilio Voice API
+    const response = await axios({
+      method: "post",
+      url: `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Calls.json`,
+      auth: {
+        username: process.env.TWILIO_ACCOUNT_SID,
+        password: process.env.TWILIO_AUTH_TOKEN,
+      },
+      data: `To=${encodeURIComponent(phoneNumber)}&From=${encodeURIComponent(
+        process.env.TWILIO_PHONE_NUMBER
+      )}&Twiml=${encodeURIComponent(twiml)}`,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    console.log(
+      `Call reminder initiated to ${phoneNumber} for ${reminderType} reminder`
+    );
+    return true;
+  } catch (error) {
+    console.error("Error sending call reminder:", error);
+    return false;
+  }
+};
+
 // Schedule reminder for a booking
 const scheduleReminder = async (booking, reminderType, reminderTime) => {
   try {
@@ -296,8 +362,13 @@ const sendReminder = async (booking, reminderType) => {
       "reminderPreferences"
     );
 
+    let channelsUsed = [];
+
     // Send email reminder
-    await sendEmailReminder(booking, reminderType);
+    const emailResult = await sendEmailReminder(booking, reminderType);
+    if (emailResult) {
+      channelsUsed.push("email");
+    }
 
     // Send SMS reminder if phone number is available and SMS is enabled
     if (booking.guestPhone && user?.reminderPreferences?.enableSMS) {
@@ -307,7 +378,14 @@ const sendReminder = async (booking, reminderType) => {
           : user.reminderPreferences.sms1hour;
 
       if (smsEnabled) {
-        await sendSMSReminder(booking, reminderType, booking.guestPhone);
+        const smsResult = await sendSMSReminder(
+          booking,
+          reminderType,
+          booking.guestPhone
+        );
+        if (smsResult) {
+          channelsUsed.push("sms");
+        }
       }
     }
 
@@ -319,12 +397,42 @@ const sendReminder = async (booking, reminderType) => {
           : user.reminderPreferences.whatsapp1hour;
 
       if (whatsappEnabled) {
-        await sendWhatsAppReminder(booking, reminderType, booking.guestPhone);
+        const whatsappResult = await sendWhatsAppReminder(
+          booking,
+          reminderType,
+          booking.guestPhone
+        );
+        if (whatsappResult) {
+          channelsUsed.push("whatsapp");
+        }
       }
     }
 
-    // Update reminder status in database
-    await updateReminderStatus(booking._id, reminderType, "sent");
+    // Send call reminder if phone number is available and call is enabled
+    if (booking.guestPhone && user?.reminderPreferences?.enableCall) {
+      const callEnabled =
+        reminderType === "15min"
+          ? user.reminderPreferences.call15min
+          : user.reminderPreferences.call1hour;
+
+      if (callEnabled) {
+        const callResult = await sendCallReminder(
+          booking,
+          reminderType,
+          booking.guestPhone
+        );
+        if (callResult) {
+          channelsUsed.push("call");
+        }
+      }
+    }
+
+    // Update reminder status in database for each channel used
+    for (const channel of channelsUsed) {
+      await updateReminderStatus(booking._id, reminderType, "sent", channel);
+    }
+
+    console.log(`Reminders sent via channels: ${channelsUsed.join(", ")}`);
   } catch (error) {
     console.error("Error sending reminder:", error);
     await updateReminderStatus(booking._id, reminderType, "failed");
@@ -332,16 +440,27 @@ const sendReminder = async (booking, reminderType) => {
 };
 
 // Update reminder status in database
-const updateReminderStatus = async (bookingId, reminderType, status) => {
+const updateReminderStatus = async (
+  bookingId,
+  reminderType,
+  status,
+  channel = null
+) => {
   try {
     const Booking = require("../models/Booking");
+    const updateData = {
+      type: reminderType,
+      status: status,
+      sentAt: new Date(),
+    };
+
+    if (channel) {
+      updateData.channel = channel;
+    }
+
     await Booking.findByIdAndUpdate(bookingId, {
       $push: {
-        reminderHistory: {
-          type: reminderType,
-          status: status,
-          sentAt: new Date(),
-        },
+        reminderHistory: updateData,
       },
     });
   } catch (error) {
@@ -415,6 +534,19 @@ const scheduleAllReminders = async (booking, reminderSettings) => {
       }
     }
 
+    // Schedule call reminders if enabled and phone number is available
+    if (booking.guestPhone && user?.reminderPreferences?.enableCall) {
+      if (reminderSettings.call15min || user.reminderPreferences.call15min) {
+        const reminderTime = new Date(startTime.getTime() - 15 * 60 * 1000);
+        await scheduleReminder(booking, "15min", reminderTime);
+      }
+
+      if (reminderSettings.call1hour || user.reminderPreferences.call1hour) {
+        const reminderTime = new Date(startTime.getTime() - 60 * 60 * 1000);
+        await scheduleReminder(booking, "1hour", reminderTime);
+      }
+    }
+
     console.log(`All reminders scheduled for booking ${booking._id}`);
   } catch (error) {
     console.error("Error scheduling all reminders:", error);
@@ -425,6 +557,7 @@ module.exports = {
   sendEmailReminder,
   sendSMSReminder,
   sendWhatsAppReminder,
+  sendCallReminder,
   scheduleReminder,
   scheduleAllReminders,
   sendReminder,

@@ -109,8 +109,11 @@ const userSchema = new mongoose.Schema(
       sms1hour: { type: Boolean, default: false },
       whatsapp15min: { type: Boolean, default: false },
       whatsapp1hour: { type: Boolean, default: false },
+      call15min: { type: Boolean, default: false },
+      call1hour: { type: Boolean, default: false },
       enableSMS: { type: Boolean, default: false },
       enableWhatsApp: { type: Boolean, default: false },
+      enableCall: { type: Boolean, default: false },
     },
     provider: {
       type: String,

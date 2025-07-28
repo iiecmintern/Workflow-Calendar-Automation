@@ -20,6 +20,7 @@ import {
   FaUser,
   FaMicrosoft,
   FaCloud,
+  FaPhone,
 } from "react-icons/fa";
 
 const HEADER_IMAGE =
@@ -63,8 +64,11 @@ const Profile = () => {
     sms1hour: false,
     whatsapp15min: false,
     whatsapp1hour: false,
+    call15min: false,
+    call1hour: false,
     enableSMS: false,
     enableWhatsApp: false,
+    enableCall: false,
   });
   const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
   const [changeNewPassword, setChangeNewPassword] = useState("");
@@ -944,6 +948,63 @@ const Profile = () => {
                           onChange={(e) =>
                             handleReminderPreferenceChange(
                               "whatsapp1hour",
+                              e.target.checked
+                            )
+                          }
+                          className="mr-2 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          1 hour before
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between mb-3 mt-6">
+                    <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                      <FaPhone className="w-4 h-4 text-green-600" />
+                      Call Reminders
+                    </h4>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={reminderPreferences.enableCall}
+                        onChange={(e) =>
+                          handleReminderPreferenceChange(
+                            "enableCall",
+                            e.target.checked
+                          )
+                        }
+                        className="mr-2 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Enable Call</span>
+                    </label>
+                  </div>
+                  {reminderPreferences.enableCall && (
+                    <div className="space-y-3">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={reminderPreferences.call15min}
+                          onChange={(e) =>
+                            handleReminderPreferenceChange(
+                              "call15min",
+                              e.target.checked
+                            )
+                          }
+                          className="mr-2 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          15 minutes before
+                        </span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={reminderPreferences.call1hour}
+                          onChange={(e) =>
+                            handleReminderPreferenceChange(
+                              "call1hour",
                               e.target.checked
                             )
                           }

@@ -37,6 +37,8 @@ const BookingSchema = new mongoose.Schema(
       sms1hour: { type: Boolean, default: false },
       whatsapp15min: { type: Boolean, default: false },
       whatsapp1hour: { type: Boolean, default: false },
+      call15min: { type: Boolean, default: false },
+      call1hour: { type: Boolean, default: false },
     },
     // Reminder history
     reminderHistory: [
@@ -44,7 +46,7 @@ const BookingSchema = new mongoose.Schema(
         type: { type: String, enum: ["15min", "1hour", "1day", "1week"] },
         status: { type: String, enum: ["scheduled", "sent", "failed"] },
         sentAt: { type: Date },
-        channel: { type: String, enum: ["email", "sms", "whatsapp"] },
+        channel: { type: String, enum: ["email", "sms", "whatsapp", "call"] },
       },
     ],
     // Form responses
