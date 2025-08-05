@@ -1,121 +1,101 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const ConditionSchema = new mongoose.Schema(
-  {
-    type: {
-      type: String,
-      enum: ["rating_below", "sentiment_negative", "no_show", "cancelled", "feedback_missing"],
-      required: true
-    },
-    value: mongoose.Schema.Types.Mixed, // threshold value (e.g., rating < 3)
-    operator: {
-      type: String,
-      enum: ["less_than", "greater_than", "equals", "not_equals", "contains"],
-      default: "less_than"
+class AutoReschedule {
+  constructor(data) {
+    this.id = data.id;
+    this.owner = data.owner;
+    this.name = data.name;
+    this.description = data.description;
+    this.isActive = data.isActive !== undefined ? data.isActive : true;
+    this.conditions = data.conditions || [];
+    this.actions = data.actions || [];
+    this.settings = data.settings || {
+      executeImmediately: false,
+      executeAfterHours: 1,
+      maxExecutions: 1,
+      requireConfirmation: false,
+    };
+    this.stats = data.stats || {
+      totalExecutions: 0,
+      successfulActions: 0,
+      failedActions: 0,
+      lastExecuted: null,
+    };
+    this.bookingPages = data.bookingPages || [];
+    this.surveys = data.surveys || [];
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
+
+  async save() {
+    this.updatedAt = new Date();
+    const ruleData = { ...this };
+    delete ruleData.id;
+    
+    if (this.id) {
+      await db.collection('autoReschedules').doc(this.id).set(ruleData, { merge: true });
+    } else {
+      const docRef = await db.collection('autoReschedules').add(ruleData);
+      this.id = docRef.id;
     }
-  },
-  { _id: false }
-);
+    return this;
+  }
 
-const ActionSchema = new mongoose.Schema(
-  {
-    type: {
-      type: String,
-      enum: ["reschedule", "follow_up", "refund", "compensation", "escalate"],
-      required: true
-    },
-    // For reschedule action
-    rescheduleSettings: {
-      findNextSlot: { type: Boolean, default: true },
-      withinDays: { type: Number, default: 7 },
-      preferredTimeSlots: [String], // e.g., ["09:00", "14:00"]
-      avoidDays: [String], // e.g., ["Saturday", "Sunday"]
-      bufferDays: { type: Number, default: 1 } // minimum days between meetings
-    },
-    // For follow-up action
-    followUpSettings: {
-      delayHours: { type: Number, default: 24 },
-      message: { type: String, trim: true },
-      includeSurvey: { type: Boolean, default: true }
-    },
-    // For compensation action
-    compensationSettings: {
-      type: {
-        type: String,
-        enum: ["discount", "credit", "refund", "free_session"],
-        default: "discount"
-      },
-      value: { type: Number, default: 0 }, // percentage or amount
-      message: { type: String, trim: true }
-    },
-    // For escalate action
-    escalateSettings: {
-      escalateTo: { type: String, trim: true }, // email or user ID
-      priority: {
-        type: String,
-        enum: ["low", "medium", "high", "urgent"],
-        default: "medium"
-      },
-      message: { type: String, trim: true }
+  static async create(data) {
+    const rule = new AutoReschedule(data);
+    await rule.save();
+    return rule;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('autoReschedules');
+    
+    Object.keys(query).forEach(key => {
+      if (key === '$or') {
+        // Handle $or queries - we'll need to do multiple queries and merge
+        // For now, simplified approach
+      } else {
+        queryRef = queryRef.where(key, '==', query[key]);
+      }
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new AutoReschedule({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('autoReschedules').doc(id).get();
+    if (!doc.exists) return null;
+    return new AutoReschedule({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const rules = await this.find(query);
+    return rules.length > 0 ? rules[0] : null;
+  }
+
+  // Populate method simulation
+  async populate(field, select) {
+    if (field === 'bookingPages' && this.bookingPages) {
+      const BookingPage = require('./BookingPage');
+      const populatedPages = [];
+      for (const pageId of this.bookingPages) {
+        const page = await BookingPage.findById(pageId);
+        if (page) populatedPages.push(page);
+      }
+      this.bookingPages = populatedPages;
     }
-  },
-  { _id: false }
-);
+    if (field === 'surveys' && this.surveys) {
+      const Survey = require('./Survey');
+      const populatedSurveys = [];
+      for (const surveyId of this.surveys) {
+        const survey = await Survey.findById(surveyId);
+        if (survey) populatedSurveys.push(survey);
+      }
+      this.surveys = populatedSurveys;
+    }
+    return this;
+  }
+}
 
-const AutoRescheduleSchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    description: {
-      type: String,
-      trim: true
-    },
-    isActive: {
-      type: Boolean,
-      default: true
-    },
-    // Trigger conditions
-    conditions: [ConditionSchema],
-    // Actions to take
-    actions: [ActionSchema],
-    // Execution settings
-    settings: {
-      executeImmediately: { type: Boolean, default: false },
-      executeAfterHours: { type: Number, default: 1 },
-      maxExecutions: { type: Number, default: 1 }, // prevent infinite loops
-      requireConfirmation: { type: Boolean, default: false }
-    },
-    // Statistics
-    stats: {
-      totalExecutions: { type: Number, default: 0 },
-      successfulActions: { type: Number, default: 0 },
-      failedActions: { type: Number, default: 0 },
-      lastExecuted: { type: Date }
-    },
-    // Associated booking pages
-    bookingPages: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "BookingPage"
-    }],
-    // Associated surveys (for feedback-based triggers)
-    surveys: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Survey"
-    }]
-  },
-  { timestamps: true }
-);
-
-// Indexes for efficient queries
-AutoRescheduleSchema.index({ owner: 1, isActive: 1 });
-AutoRescheduleSchema.index({ "stats.lastExecuted": -1 });
-
-module.exports = mongoose.model("AutoReschedule", AutoRescheduleSchema); 
+module.exports = AutoReschedule;

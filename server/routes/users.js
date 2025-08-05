@@ -7,9 +7,10 @@ const router = express.Router();
 // GET /api/users/profile - Get user profile
 router.get("/profile", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
-    res.json(user);
+    const user = await User.findById(req.user.id);
+    res.json(user.toJSON());
   } catch (err) {
+    console.error("Get profile error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -28,12 +29,13 @@ router.put(
     try {
       const { name, avatar } = req.body;
       const user = await User.findByIdAndUpdate(
-        req.user._id,
+        req.user.id,
         { name, avatar },
         { new: true }
-      ).select("-password");
-      res.json(user);
+      );
+      res.json(user.toJSON());
     } catch (err) {
+      console.error("Update profile error:", err);
       res.status(500).json({ message: "Server error" });
     }
   }
@@ -42,9 +44,7 @@ router.put(
 // GET /api/users/meeting-preferences - Get meeting preferences
 router.get("/meeting-preferences", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select(
-      "defaultMeetingType customMeetingUrl meetingSettings"
-    );
+    const user = await User.findById(req.user.id);
     res.json({
       defaultMeetingType: user.defaultMeetingType || "google-meet",
       customMeetingUrl: user.customMeetingUrl || "",
@@ -53,6 +53,7 @@ router.get("/meeting-preferences", protect, async (req, res) => {
       defaultDuration: user.meetingSettings?.defaultDuration ?? 30,
     });
   } catch (err) {
+    console.error("Get meeting preferences error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -78,9 +79,9 @@ router.put("/meeting-preferences", protect, async (req, res) => {
       },
     };
 
-    const user = await User.findByIdAndUpdate(req.user._id, updateData, {
+    const user = await User.findByIdAndUpdate(req.user.id, updateData, {
       new: true,
-    }).select("-password");
+    });
 
     res.json({
       defaultMeetingType: user.defaultMeetingType,
@@ -90,6 +91,7 @@ router.put("/meeting-preferences", protect, async (req, res) => {
       defaultDuration: user.meetingSettings.defaultDuration,
     });
   } catch (err) {
+    console.error("Update meeting preferences error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -97,9 +99,7 @@ router.put("/meeting-preferences", protect, async (req, res) => {
 // GET /api/users/reminder-preferences - Get reminder preferences
 router.get("/reminder-preferences", protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select(
-      "reminderPreferences"
-    );
+    const user = await User.findById(req.user.id);
     res.json({
       email15min: user.reminderPreferences?.email15min ?? true,
       email1hour: user.reminderPreferences?.email1hour ?? true,
@@ -116,6 +116,7 @@ router.get("/reminder-preferences", protect, async (req, res) => {
       enableCall: user.reminderPreferences?.enableCall ?? false,
     });
   } catch (err) {
+    console.error("Get reminder preferences error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -157,9 +158,9 @@ router.put("/reminder-preferences", protect, async (req, res) => {
       },
     };
 
-    const user = await User.findByIdAndUpdate(req.user._id, updateData, {
+    const user = await User.findByIdAndUpdate(req.user.id, updateData, {
       new: true,
-    }).select("-password");
+    });
 
     res.json({
       email15min: user.reminderPreferences.email15min,
@@ -177,6 +178,7 @@ router.put("/reminder-preferences", protect, async (req, res) => {
       enableCall: user.reminderPreferences.enableCall,
     });
   } catch (err) {
+    console.error("Update reminder preferences error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

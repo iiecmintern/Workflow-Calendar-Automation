@@ -14,12 +14,13 @@ const ownerCheck = async (req, res, next) => {
     const workflow = await Workflow.findById(req.params.id);
     if (!workflow)
       return res.status(404).json({ message: "Workflow not found" });
-    if (workflow.owner.toString() !== req.user._id.toString()) {
+    if (workflow.owner !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
     req.workflow = workflow;
     next();
   } catch (err) {
+    console.error("Owner check error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -33,13 +34,14 @@ router.post("/", protect, [body("name").notEmpty()], async (req, res) => {
     const workflow = await Workflow.create({
       name: req.body.name,
       description: req.body.description,
-      owner: req.user._id,
+      owner: req.user.id,
       nodes: req.body.nodes || [],
       edges: req.body.edges || [],
       status: req.body.status || "draft",
     });
     res.status(201).json(workflow);
   } catch (err) {
+    console.error("Create workflow error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -47,9 +49,10 @@ router.post("/", protect, [body("name").notEmpty()], async (req, res) => {
 // Get all workflows for user
 router.get("/", protect, async (req, res) => {
   try {
-    const workflows = await Workflow.find({ owner: req.user._id });
+    const workflows = await Workflow.find({ owner: req.user.id });
     res.json(workflows);
   } catch (err) {
+    console.error("Get workflows error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

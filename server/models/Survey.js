@@ -1,102 +1,77 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const SurveyQuestionSchema = new mongoose.Schema(
-  {
-    question: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    type: {
-      type: String,
-      enum: ["rating", "text", "multiple_choice", "yes_no", "scale"],
-      required: true,
-    },
-    options: [
-      {
-        label: String,
-        value: String,
-      },
-    ],
-    required: {
-      type: Boolean,
-      default: false,
-    },
-    order: {
-      type: Number,
-      default: 0,
-    },
-    // For rating questions
-    maxRating: {
-      type: Number,
-      default: 5,
-    },
-    // For scale questions
-    scaleLabels: {
-      min: String,
-      max: String,
-    },
-  },
-  { _id: false }
-);
+class Survey {
+  constructor(data) {
+    this.id = data.id;
+    this.owner = data.owner;
+    this.name = data.name;
+    this.description = data.description;
+    this.questions = data.questions || [];
+    this.isActive = data.isActive !== undefined ? data.isActive : true;
+    this.triggers = data.triggers || {
+      sendAfterMeeting: true,
+      sendAfterHours: 1,
+      sendReminders: true,
+      maxReminders: 2,
+    };
+    this.settings = data.settings || {
+      allowAnonymous: false,
+      showProgress: true,
+      allowPartial: false,
+    };
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
 
-const SurveySchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-    },
-    questions: [SurveyQuestionSchema],
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    // Survey triggers
-    triggers: {
-      sendAfterMeeting: {
-        type: Boolean,
-        default: true,
-      },
-      sendAfterHours: {
-        type: Number,
-        default: 1, // Send 1 hour after meeting
-      },
-      sendReminders: {
-        type: Boolean,
-        default: true,
-      },
-      maxReminders: {
-        type: Number,
-        default: 2,
-      },
-    },
-    // Survey settings
-    settings: {
-      allowAnonymous: {
-        type: Boolean,
-        default: false,
-      },
-      showProgress: {
-        type: Boolean,
-        default: true,
-      },
-      allowPartial: {
-        type: Boolean,
-        default: false,
-      },
-    },
-  },
-  { timestamps: true }
-);
+  async save() {
+    this.updatedAt = new Date();
+    const surveyData = { ...this };
+    delete surveyData.id;
+    
+    if (this.id) {
+      await db.collection('surveys').doc(this.id).set(surveyData, { merge: true });
+    } else {
+      const docRef = await db.collection('surveys').add(surveyData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
 
-module.exports = mongoose.model("Survey", SurveySchema);
+  static async create(data) {
+    const survey = new Survey(data);
+    await survey.save();
+    return survey;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('surveys');
+    
+    Object.keys(query).forEach(key => {
+      queryRef = queryRef.where(key, '==', query[key]);
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new Survey({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('surveys').doc(id).get();
+    if (!doc.exists) return null;
+    return new Survey({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const surveys = await this.find(query);
+    return surveys.length > 0 ? surveys[0] : null;
+  }
+
+  static async findOneAndDelete(query) {
+    const survey = await this.findOne(query);
+    if (survey) {
+      await db.collection('surveys').doc(survey.id).delete();
+    }
+    return survey;
+  }
+}
+
+module.exports = Survey;

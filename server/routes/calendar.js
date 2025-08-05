@@ -70,7 +70,6 @@ router.get("/google/callback", async (req, res) => {
     const { tokens } = await oauth2Client.getToken(code);
 
     // Store tokens in user document using the state parameter as user ID
-    const User = require("../models/User");
     await User.findByIdAndUpdate(state, {
       googleTokens: tokens,
       googleCalendarConnected: true,
@@ -95,14 +94,14 @@ router.get("/google/callback", async (req, res) => {
 // GET /api/calendar/google/status - Check connection status
 router.get("/google/status", protect, async (req, res) => {
   try {
-    const User = require("../models/User");
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.id);
 
     res.json({
       connected: user.googleCalendarConnected || false,
       connectedAt: user.googleCalendarConnectedAt,
     });
   } catch (error) {
+    console.error("Google status error:", error);
     res.status(500).json({ message: "Failed to check Google Calendar status" });
   }
 });
@@ -110,17 +109,15 @@ router.get("/google/status", protect, async (req, res) => {
 // POST /api/calendar/google/disconnect - Disconnect Google Calendar
 router.post("/google/disconnect", protect, async (req, res) => {
   try {
-    const User = require("../models/User");
-    await User.findByIdAndUpdate(req.user._id, {
-      $unset: {
-        googleTokens: 1,
-        googleCalendarConnected: 1,
-        googleCalendarConnectedAt: 1,
-      },
+    await User.findByIdAndUpdate(req.user.id, {
+      googleTokens: null,
+      googleCalendarConnected: false,
+      googleCalendarConnectedAt: null,
     });
 
     res.json({ message: "Google Calendar disconnected successfully" });
   } catch (error) {
+    console.error("Google disconnect error:", error);
     res.status(500).json({ message: "Failed to disconnect Google Calendar" });
   }
 });

@@ -1,146 +1,102 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const WebhookSchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    workflow: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Workflow",
-      required: true,
-    },
-    nodeId: {
-      type: String,
-      required: true,
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    type: {
-      type: String,
-      enum: ["inbound", "outbound"],
-      required: true,
-    },
-    // For inbound webhooks
-    inbound: {
-      endpoint: {
-        type: String,
-        trim: true,
-      },
-      secret: {
-        type: String,
-        trim: true,
-      },
-      method: {
-        type: String,
-        enum: ["GET", "POST", "PUT", "DELETE"],
-        default: "POST",
-      },
-      headers: {
-        type: Map,
-        of: String,
-        default: {},
-      },
-      bodySchema: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {},
-      },
-      isActive: {
-        type: Boolean,
-        default: true,
-      },
-    },
-    // For outbound webhooks
-    outbound: {
-      url: {
-        type: String,
-        trim: true,
-      },
-      method: {
-        type: String,
-        enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-        default: "POST",
-      },
-      headers: {
-        type: Map,
-        of: String,
-        default: {},
-      },
-      body: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {},
-      },
-      timeout: {
-        type: Number,
-        default: 30000, // 30 seconds
-      },
-      retryCount: {
-        type: Number,
-        default: 3,
-      },
-      retryDelay: {
-        type: Number,
-        default: 5000, // 5 seconds
-      },
-    },
-    // Webhook execution history
-    executions: [
-      {
-        timestamp: {
-          type: Date,
-          default: Date.now,
-        },
-        status: {
-          type: String,
-          enum: ["success", "failed", "pending"],
-          default: "pending",
-        },
-        response: {
-          statusCode: Number,
-          headers: mongoose.Schema.Types.Mixed,
-          body: mongoose.Schema.Types.Mixed,
-        },
-        error: {
-          message: String,
-          code: String,
-        },
-        duration: Number, // milliseconds
-      },
-    ],
-    // Statistics
-    stats: {
-      totalExecutions: {
-        type: Number,
-        default: 0,
-      },
-      successfulExecutions: {
-        type: Number,
-        default: 0,
-      },
-      failedExecutions: {
-        type: Number,
-        default: 0,
-      },
-      averageResponseTime: {
-        type: Number,
-        default: 0,
-      },
-      lastExecuted: {
-        type: Date,
-      },
-    },
-  },
-  { timestamps: true }
-);
+class Webhook {
+  constructor(data) {
+    this.id = data.id;
+    this.owner = data.owner;
+    this.workflow = data.workflow;
+    this.nodeId = data.nodeId;
+    this.name = data.name;
+    this.type = data.type;
+    this.inbound = data.inbound;
+    this.outbound = data.outbound;
+    this.executions = data.executions || [];
+    this.stats = data.stats || {
+      totalExecutions: 0,
+      successfulExecutions: 0,
+      failedExecutions: 0,
+      averageResponseTime: 0,
+      lastExecuted: null,
+    };
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
 
-// Indexes for efficient queries
-WebhookSchema.index({ owner: 1, workflow: 1 });
-WebhookSchema.index({ "inbound.endpoint": 1 }, { unique: true, sparse: true });
-WebhookSchema.index({ "stats.lastExecuted": -1 });
+  async save() {
+    this.updatedAt = new Date();
+    const webhookData = { ...this };
+    delete webhookData.id;
+    
+    if (this.id) {
+      await db.collection('webhooks').doc(this.id).set(webhookData, { merge: true });
+    } else {
+      const docRef = await db.collection('webhooks').add(webhookData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
 
-module.exports = mongoose.model("Webhook", WebhookSchema);
+  static async create(data) {
+    const webhook = new Webhook(data);
+    await webhook.save();
+    return webhook;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('webhooks');
+    
+    Object.keys(query).forEach(key => {
+      if (key === 'inbound.endpoint') {
+        queryRef = queryRef.where('inbound.endpoint', '==', query[key]);
+      } else {
+        queryRef = queryRef.where(key, '==', query[key]);
+      }
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new Webhook({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('webhooks').doc(id).get();
+    if (!doc.exists) return null;
+    return new Webhook({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const webhooks = await this.find(query);
+    return webhooks.length > 0 ? webhooks[0] : null;
+  }
+
+  static async findOneAndUpdate(query, updateData, options = {}) {
+    const webhook = await this.findOne(query);
+    if (!webhook) return null;
+    
+    Object.keys(updateData).forEach(key => {
+      webhook[key] = updateData[key];
+    });
+    
+    await webhook.save();
+    return webhook;
+  }
+
+  static async findOneAndDelete(query) {
+    const webhook = await this.findOne(query);
+    if (webhook) {
+      await db.collection('webhooks').doc(webhook.id).delete();
+    }
+    return webhook;
+  }
+
+  // Populate method simulation
+  async populate(field, select) {
+    if (field === 'workflow' && this.workflow) {
+      const Workflow = require('./Workflow');
+      const workflow = await Workflow.findById(this.workflow);
+      this.workflow = workflow;
+    }
+    return this;
+  }
+}
+
+module.exports = Webhook;

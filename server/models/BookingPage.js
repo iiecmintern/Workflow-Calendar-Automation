@@ -1,42 +1,65 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const MeetingTypeSchema = new mongoose.Schema(
-  {
-    type: {
-      type: String,
-      enum: ["1-on-1", "group", "panel", "round-robin"],
-      required: true,
-    },
-    label: { type: String, required: true },
-    duration: { type: Number, default: 30 }, // minutes
-    maxParticipants: { type: Number, default: 1 },
-    roundRobin: { type: Boolean, default: false },
-    // Add more fields as needed
-  },
-  { _id: false }
-);
+class BookingPage {
+  constructor(data) {
+    this.id = data.id;
+    this.owner = data.owner;
+    this.slug = data.slug;
+    this.title = data.title;
+    this.description = data.description || "";
+    this.logo = data.logo || "";
+    this.color = data.color || "#2563eb";
+    this.meetingTypes = data.meetingTypes || [];
+    this.settings = data.settings || {
+      buffer: 0,
+      allowGuests: true,
+    };
+    this.isActive = data.isActive !== undefined ? data.isActive : true;
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
 
-const BookingPageSchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    slug: { type: String, required: true, unique: true },
-    title: { type: String, required: true },
-    description: { type: String, default: "" },
-    logo: { type: String, default: "" }, // URL or file path
-    color: { type: String, default: "#2563eb" }, // Brand color
-    meetingTypes: { type: [MeetingTypeSchema], default: [] },
-    settings: {
-      buffer: { type: Number, default: 0 },
-      allowGuests: { type: Boolean, default: true },
-      // Add more settings as needed
-    },
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true }
-);
+  async save() {
+    this.updatedAt = new Date();
+    const pageData = { ...this };
+    delete pageData.id;
+    
+    if (this.id) {
+      await db.collection('bookingPages').doc(this.id).set(pageData, { merge: true });
+    } else {
+      const docRef = await db.collection('bookingPages').add(pageData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
 
-module.exports = mongoose.model("BookingPage", BookingPageSchema);
+  static async create(data) {
+    const page = new BookingPage(data);
+    await page.save();
+    return page;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('bookingPages');
+    
+    Object.keys(query).forEach(key => {
+      queryRef = queryRef.where(key, '==', query[key]);
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new BookingPage({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('bookingPages').doc(id).get();
+    if (!doc.exists) return null;
+    return new BookingPage({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const pages = await this.find(query);
+    return pages.length > 0 ? pages[0] : null;
+  }
+}
+
+module.exports = BookingPage;

@@ -1,206 +1,208 @@
-const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { db } = require("../config/firebase");
 
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Name is required"],
-      trim: true,
-      maxlength: [50, "Name cannot be more than 50 characters"],
-    },
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [
-        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-        "Please enter a valid email",
-      ],
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters"],
-      select: false,
-    },
-    role: {
-      type: String,
-      enum: ["user", "admin", "moderator"],
-      default: "user",
-    },
-    avatar: {
-      type: String,
-      default: "",
-    },
-    status: {
-      type: String,
-      enum: ["online", "away", "offline"],
-      default: "offline",
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    lastActive: {
-      type: Date,
-      default: Date.now,
-    },
-    preferences: {
-      theme: {
-        type: String,
-        enum: ["light", "dark"],
-        default: "light",
-      },
+class User {
+  constructor(data) {
+    this.id = data.id;
+    this.name = data.name;
+    this.email = data.email;
+    this.password = data.password;
+    this.role = data.role || "user";
+    this.avatar = data.avatar || "";
+    this.status = data.status || "offline";
+    this.isActive = data.isActive !== undefined ? data.isActive : true;
+    this.lastActive = data.lastActive || new Date();
+    this.preferences = data.preferences || {
+      theme: "light",
       notifications: {
-        email: { type: Boolean, default: true },
-        push: { type: Boolean, default: true },
-        sms: { type: Boolean, default: false },
+        email: true,
+        push: true,
+        sms: false,
       },
-      timezone: {
-        type: String,
-        default: "UTC",
-      },
-      language: {
-        type: String,
-        default: "en",
-      },
-    },
-    resetPasswordToken: String,
-    resetPasswordExpire: Date,
-    emailVerified: {
-      type: Boolean,
-      default: false,
-    },
-    emailVerificationToken: String,
-    emailVerificationExpire: Date,
-    googleTokens: { type: Object, default: null },
-    googleCalendarConnected: { type: Boolean, default: false },
-    googleCalendarConnectedAt: { type: Date, default: null },
-    // Outlook Calendar integration
-    outlookTokens: { type: Object, default: null },
-    outlookCalendarConnected: { type: Boolean, default: false },
-    outlookCalendarConnectedAt: { type: Date, default: null },
-    // Zoho Calendar integration
-    zohoTokens: { type: Object, default: null },
-    zohoCalendarConnected: { type: Boolean, default: false },
-    zohoCalendarConnectedAt: { type: Date, default: null },
-    // Meeting preferences
-    defaultMeetingType: {
-      type: String,
-      enum: ["google-meet", "zoom", "teams", "custom"],
-      default: "google-meet",
-    },
-    customMeetingUrl: { type: String, trim: true },
-    meetingSettings: {
-      autoGenerateLinks: { type: Boolean, default: true },
-      includePassword: { type: Boolean, default: true },
-      defaultDuration: { type: Number, default: 30 }, // minutes
-    },
-    // Reminder preferences
-    reminderPreferences: {
-      email15min: { type: Boolean, default: true },
-      email1hour: { type: Boolean, default: true },
-      email1day: { type: Boolean, default: false },
-      email1week: { type: Boolean, default: false },
-      sms15min: { type: Boolean, default: false },
-      sms1hour: { type: Boolean, default: false },
-      whatsapp15min: { type: Boolean, default: false },
-      whatsapp1hour: { type: Boolean, default: false },
-      call15min: { type: Boolean, default: false },
-      call1hour: { type: Boolean, default: false },
-      enableSMS: { type: Boolean, default: false },
-      enableWhatsApp: { type: Boolean, default: false },
-      enableCall: { type: Boolean, default: false },
-    },
-    provider: {
-      type: String,
-      enum: ["local", "google"],
-      default: "local",
-    },
-  },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
-  }
-);
-
-// Virtual for user's full profile (without sensitive data)
-userSchema.virtual("profile").get(function () {
-  return {
-    id: this._id,
-    name: this.name,
-    email: this.email,
-    role: this.role,
-    avatar: this.avatar,
-    status: this.status,
-    isActive: this.isActive,
-    lastActive: this.lastActive,
-    preferences: this.preferences,
-    emailVerified: this.emailVerified,
-    createdAt: this.createdAt,
-    updatedAt: this.updatedAt,
-  };
-});
-
-// Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ status: 1 });
-userSchema.index({ isActive: 1 });
-
-// Pre-save middleware to hash password
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
-    return next();
+      timezone: "UTC",
+      language: "en",
+    };
+    this.resetPasswordToken = data.resetPasswordToken;
+    this.resetPasswordExpire = data.resetPasswordExpire;
+    this.emailVerified = data.emailVerified || false;
+    this.emailVerificationToken = data.emailVerificationToken;
+    this.emailVerificationExpire = data.emailVerificationExpire;
+    this.googleTokens = data.googleTokens || null;
+    this.googleCalendarConnected = data.googleCalendarConnected || false;
+    this.googleCalendarConnectedAt = data.googleCalendarConnectedAt || null;
+    this.outlookTokens = data.outlookTokens || null;
+    this.outlookCalendarConnected = data.outlookCalendarConnected || false;
+    this.outlookCalendarConnectedAt = data.outlookCalendarConnectedAt || null;
+    this.zohoTokens = data.zohoTokens || null;
+    this.zohoCalendarConnected = data.zohoCalendarConnected || false;
+    this.zohoCalendarConnectedAt = data.zohoCalendarConnectedAt || null;
+    this.defaultMeetingType = data.defaultMeetingType || "google-meet";
+    this.customMeetingUrl = data.customMeetingUrl || "";
+    this.meetingSettings = data.meetingSettings || {
+      autoGenerateLinks: true,
+      includePassword: true,
+      defaultDuration: 30,
+    };
+    this.reminderPreferences = data.reminderPreferences || {
+      email15min: true,
+      email1hour: true,
+      email1day: false,
+      email1week: false,
+      sms15min: false,
+      sms1hour: false,
+      whatsapp15min: false,
+      whatsapp1hour: false,
+      call15min: false,
+      call1hour: false,
+      enableSMS: false,
+      enableWhatsApp: false,
+      enableCall: false,
+    };
+    this.provider = data.provider || "local";
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
   }
 
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
+  // Hash password before saving
+  async hashPassword() {
+    if (this.password) {
+      const salt = await bcrypt.genSalt(12);
+      this.password = await bcrypt.hash(this.password, salt);
+    }
   }
-});
 
-// Method to compare password
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
-};
+  // Compare password
+  async comparePassword(candidatePassword) {
+    return await bcrypt.compare(candidatePassword, this.password);
+  }
 
-// Method to update last active
-userSchema.methods.updateLastActive = function () {
-  this.lastActive = new Date();
-  return this.save();
-};
+  // Save user to Firestore
+  async save() {
+    this.updatedAt = new Date();
+    const userData = { ...this };
+    delete userData.id; // Remove id from data
+    
+    if (this.id) {
+      await db.collection('users').doc(this.id).set(userData, { merge: true });
+    } else {
+      const docRef = await db.collection('users').add(userData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
 
-// Static method to find users by role
-userSchema.statics.findByRole = function (role) {
-  return this.find({ role, isActive: true });
-};
+  // Update last active
+  async updateLastActive() {
+    this.lastActive = new Date();
+    await this.save();
+    return this;
+  }
 
-// Static method to find active users
-userSchema.statics.findActive = function () {
-  return this.find({ isActive: true });
-};
+  // Static methods
+  static async findById(id) {
+    const doc = await db.collection('users').doc(id).get();
+    if (!doc.exists) return null;
+    return new User({ id: doc.id, ...doc.data() });
+  }
 
-// Static method to search users
-userSchema.statics.search = function (query) {
-  return this.find({
-    $and: [
-      { isActive: true },
-      {
-        $or: [
-          { name: { $regex: query, $options: "i" } },
-          { email: { $regex: query, $options: "i" } },
-        ],
-      },
-    ],
-  }).select("-password");
-};
+  static async findOne(query) {
+    let queryRef = db.collection('users');
+    
+    // Build query
+    Object.keys(query).forEach(key => {
+      queryRef = queryRef.where(key, '==', query[key]);
+    });
 
-module.exports = mongoose.model("User", userSchema);
+    const snapshot = await queryRef.limit(1).get();
+    if (snapshot.empty) return null;
+    
+    const doc = snapshot.docs[0];
+    return new User({ id: doc.id, ...doc.data() });
+  }
+
+  static async create(data) {
+    const user = new User(data);
+    await user.hashPassword();
+    await user.save();
+    return user;
+  }
+
+  static async findByIdAndUpdate(id, updateData, options = {}) {
+    const user = await this.findById(id);
+    if (!user) return null;
+    
+    Object.keys(updateData).forEach(key => {
+      if (key.startsWith('$')) {
+        // Handle MongoDB-style operators
+        if (key === '$unset') {
+          Object.keys(updateData[key]).forEach(unsetKey => {
+            delete user[unsetKey];
+          });
+        }
+      } else {
+        user[key] = updateData[key];
+      }
+    });
+    
+    await user.save();
+    return options.new ? user : user;
+  }
+
+  static async findByRole(role) {
+    const snapshot = await db.collection('users')
+      .where('role', '==', role)
+      .where('isActive', '==', true)
+      .get();
+    
+    return snapshot.docs.map(doc => new User({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findActive() {
+    const snapshot = await db.collection('users')
+      .where('isActive', '==', true)
+      .get();
+    
+    return snapshot.docs.map(doc => new User({ id: doc.id, ...doc.data() }));
+  }
+
+  static async search(query) {
+    // Firestore doesn't support regex, so we'll do a simple text search
+    const snapshot = await db.collection('users')
+      .where('isActive', '==', true)
+      .get();
+    
+    const users = snapshot.docs.map(doc => new User({ id: doc.id, ...doc.data() }));
+    
+    return users.filter(user => 
+      user.name.toLowerCase().includes(query.toLowerCase()) ||
+      user.email.toLowerCase().includes(query.toLowerCase())
+    );
+  }
+
+  // Convert to JSON (remove sensitive data)
+  toJSON() {
+    const userData = { ...this };
+    delete userData.password;
+    return userData;
+  }
+
+  // Get profile data
+  get profile() {
+    return {
+      id: this.id,
+      name: this.name,
+      email: this.email,
+      role: this.role,
+      avatar: this.avatar,
+      status: this.status,
+      isActive: this.isActive,
+      lastActive: this.lastActive,
+      preferences: this.preferences,
+      emailVerified: this.emailVerified,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+}
+
+module.exports = User;

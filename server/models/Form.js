@@ -1,90 +1,68 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const formFieldSchema = new mongoose.Schema({
-  label: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  type: {
-    type: String,
-    required: true,
-    enum: [
-      "text",
-      "email",
-      "phone",
-      "textarea",
-      "select",
-      "checkbox",
-      "radio",
-      "file",
-      "date",
-      "time",
-      "number",
-    ],
-  },
-  required: {
-    type: Boolean,
-    default: false,
-  },
-  placeholder: {
-    type: String,
-    trim: true,
-  },
-  options: [
-    {
-      label: String,
-      value: String,
-    },
-  ],
-  validation: {
-    minLength: Number,
-    maxLength: Number,
-    pattern: String,
-    fileTypes: [String], // for file uploads
-    maxFileSize: Number, // in MB
-  },
-  order: {
-    type: Number,
-    default: 0,
-  },
-});
-
-const formSchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-    },
-    type: {
-      type: String,
-      required: true,
-      enum: ["pre-booking", "post-booking"],
-      default: "pre-booking",
-    },
-    fields: [formFieldSchema],
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    bookingPage: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "BookingPage",
-    },
-  },
-  {
-    timestamps: true,
+class Form {
+  constructor(data) {
+    this.id = data.id;
+    this.owner = data.owner;
+    this.name = data.name;
+    this.description = data.description;
+    this.type = data.type || "pre-booking";
+    this.fields = data.fields || [];
+    this.isActive = data.isActive !== undefined ? data.isActive : true;
+    this.bookingPage = data.bookingPage;
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
   }
-);
 
-module.exports = mongoose.model("Form", formSchema);
+  async save() {
+    this.updatedAt = new Date();
+    const formData = { ...this };
+    delete formData.id;
+    
+    if (this.id) {
+      await db.collection('forms').doc(this.id).set(formData, { merge: true });
+    } else {
+      const docRef = await db.collection('forms').add(formData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
+
+  static async create(data) {
+    const form = new Form(data);
+    await form.save();
+    return form;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('forms');
+    
+    Object.keys(query).forEach(key => {
+      queryRef = queryRef.where(key, '==', query[key]);
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new Form({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('forms').doc(id).get();
+    if (!doc.exists) return null;
+    return new Form({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const forms = await this.find(query);
+    return forms.length > 0 ? forms[0] : null;
+  }
+
+  static async findByIdAndDelete(id) {
+    const form = await this.findById(id);
+    if (form) {
+      await db.collection('forms').doc(id).delete();
+    }
+    return form;
+  }
+}
+
+module.exports = Form;

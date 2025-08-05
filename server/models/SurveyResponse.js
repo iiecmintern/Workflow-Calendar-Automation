@@ -1,91 +1,97 @@
-const mongoose = require("mongoose");
+const { db } = require("../config/firebase");
 
-const SurveyResponseSchema = new mongoose.Schema(
-  {
-    survey: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Survey",
-      required: true,
-    },
-    booking: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
-      required: true,
-    },
-    respondent: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    // For anonymous responses
-    respondentEmail: {
-      type: String,
-      trim: true,
-    },
-    respondentName: {
-      type: String,
-      trim: true,
-    },
-    responses: [
-      {
-        questionIndex: {
-          type: Number,
-          required: true,
-        },
-        question: {
-          type: String,
-          required: true,
-        },
-        questionType: {
-          type: String,
-          required: true,
-        },
-        answer: mongoose.Schema.Types.Mixed, // Can be string, number, array, etc.
-        answeredAt: {
-          type: Date,
-          default: Date.now,
-        },
-      },
-    ],
-    // Survey completion status
-    status: {
-      type: String,
-      enum: ["started", "completed", "abandoned"],
-      default: "started",
-    },
-    // Timing information
-    startedAt: {
-      type: Date,
-      default: Date.now,
-    },
-    completedAt: {
-      type: Date,
-    },
-    // Survey session info
-    sessionId: {
-      type: String,
-      trim: true,
-    },
-    // Analytics
-    timeSpent: {
-      type: Number, // in seconds
-    },
-    // Feedback analysis
-    sentiment: {
-      type: String,
-      enum: ["positive", "neutral", "negative"],
-    },
-    overallRating: {
-      type: Number,
-      min: 1,
-      max: 5,
-    },
-  },
-  { timestamps: true }
-);
+class SurveyResponse {
+  constructor(data) {
+    this.id = data.id;
+    this.survey = data.survey;
+    this.booking = data.booking;
+    this.respondent = data.respondent;
+    this.respondentEmail = data.respondentEmail;
+    this.respondentName = data.respondentName;
+    this.responses = data.responses || [];
+    this.status = data.status || "started";
+    this.startedAt = data.startedAt || new Date();
+    this.completedAt = data.completedAt;
+    this.sessionId = data.sessionId;
+    this.timeSpent = data.timeSpent;
+    this.sentiment = data.sentiment;
+    this.overallRating = data.overallRating;
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
 
-// Index for efficient queries
-SurveyResponseSchema.index({ survey: 1, booking: 1 });
-SurveyResponseSchema.index({ respondent: 1, createdAt: -1 });
-SurveyResponseSchema.index({ status: 1, createdAt: -1 });
+  async save() {
+    this.updatedAt = new Date();
+    const responseData = { ...this };
+    delete responseData.id;
+    
+    if (this.id) {
+      await db.collection('surveyResponses').doc(this.id).set(responseData, { merge: true });
+    } else {
+      const docRef = await db.collection('surveyResponses').add(responseData);
+      this.id = docRef.id;
+    }
+    return this;
+  }
 
-module.exports = mongoose.model("SurveyResponse", SurveyResponseSchema);
+  static async create(data) {
+    const response = new SurveyResponse(data);
+    await response.save();
+    return response;
+  }
+
+  static async find(query = {}) {
+    let queryRef = db.collection('surveyResponses');
+    
+    Object.keys(query).forEach(key => {
+      if (typeof query[key] === 'object' && query[key].$in) {
+        queryRef = queryRef.where(key, 'in', query[key].$in);
+      } else {
+        queryRef = queryRef.where(key, '==', query[key]);
+      }
+    });
+
+    const snapshot = await queryRef.orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => new SurveyResponse({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findById(id) {
+    const doc = await db.collection('surveyResponses').doc(id).get();
+    if (!doc.exists) return null;
+    return new SurveyResponse({ id: doc.id, ...doc.data() });
+  }
+
+  static async findOne(query) {
+    const responses = await this.find(query);
+    return responses.length > 0 ? responses[0] : null;
+  }
+
+  static async deleteMany(query) {
+    const responses = await this.find(query);
+    const batch = db.batch();
+    
+    responses.forEach(response => {
+      batch.delete(db.collection('surveyResponses').doc(response.id));
+    });
+    
+    await batch.commit();
+    return { deletedCount: responses.length };
+  }
+
+  // Populate method simulation
+  async populate(field, select) {
+    if (field === 'survey' && this.survey) {
+      const Survey = require('./Survey');
+      const survey = await Survey.findById(this.survey);
+      this.survey = survey;
+    }
+    if (field === 'booking' && this.booking) {
+      const Booking = require('./Booking');
+      const booking = await Booking.findById(this.booking);
+      this.booking = booking;
+    }
+    return this;
+  }
+}
+
+module.exports = SurveyResponse;

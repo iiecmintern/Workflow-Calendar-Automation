@@ -14,12 +14,15 @@ router.get("/summary", async (req, res) => {
   try {
     const [workflows, bookings, forms, surveys, autoReschedules] =
       await Promise.all([
-        Workflow.find({ owner: req.user._id }),
-        Booking.find({ owner: req.user._id }).sort({ start: -1 }),
-        Form.find({ owner: req.user._id }),
-        Survey.find({ owner: req.user._id }),
-        AutoReschedule.find({ owner: req.user._id }),
+        Workflow.find({ owner: req.user.id }),
+        Booking.find({ owner: req.user.id }),
+        Form.find({ owner: req.user.id }),
+        Survey.find({ owner: req.user.id }),
+        AutoReschedule.find({ owner: req.user.id }),
       ]);
+
+    // Sort bookings by start date (newest first)
+    bookings.sort((a, b) => new Date(b.start) - new Date(a.start));
 
     // Recent activities: last 5 workflows and bookings
     const recentActivities = [

@@ -22,16 +22,16 @@ router.post("/register", async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: "User already exists." });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hashedPassword });
+    const user = await User.create({ name, email, password });
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
       expiresIn: "7d",
     });
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email },
     });
   } catch (err) {
+    console.error("Registration error:", err);
     res.status(500).json({ message: "Server error." });
   }
 });
@@ -40,22 +40,21 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    // Explicitly select password for authentication
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials." });
     }
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials." });
     }
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
       expiresIn: "7d",
     });
     res.json({
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -113,16 +112,16 @@ router.post("/google", async (req, res) => {
 // Change Password
 router.put("/change-password", protect, async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "All fields are required." });
     }
-    const user = await User.findById(userId).select("+password");
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res
         .status(400)
@@ -134,9 +133,11 @@ router.put("/change-password", protect, async (req, res) => {
         .json({ message: "New password must be at least 6 characters." });
     }
     user.password = newPassword;
+    await user.hashPassword();
     await user.save();
     res.json({ message: "Password changed successfully." });
   } catch (err) {
+    console.error("Change password error:", err);
     res.status(500).json({ message: "Server error." });
   }
 });
@@ -149,10 +150,11 @@ router.get("/me", async (req, res) => {
       return res.status(401).json({ message: "No token provided." });
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId).select("-password");
+    const user = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ message: "User not found." });
-    res.json({ user }); // wrap in { user: ... }
+    res.json({ user: user.toJSON() });
   } catch (err) {
+    console.error("Get user error:", err);
     res.status(401).json({ message: "Invalid token." });
   }
 });
