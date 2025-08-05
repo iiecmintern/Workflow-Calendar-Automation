@@ -41,6 +41,10 @@ npm install
 echo "📦 Installing client dependencies..."
 cd client && npm install && cd ..
 
+# Start the application
+echo "🚀 Starting the application..."
+npm run dev
+
 echo ""
 echo "🎉 Installation complete!"
 echo ""
